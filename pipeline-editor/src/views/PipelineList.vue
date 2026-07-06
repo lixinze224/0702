@@ -190,7 +190,7 @@ async function createPipeline() {
     newPipelineForm.description = ''
 
     // 跳转到流水线详情页面，带上新流水线名称
-    router.push(`/pipelineDetail?name=${encodeURIComponent(newPipeline.name)}`)
+    router.push(`/pipelineDetail/${newPipeline.id}?name=${encodeURIComponent(newPipeline.name)}`)
   } catch (error) {
     console.error('创建流水线失败:', error)
     ElMessage.error('创建流水线失败')

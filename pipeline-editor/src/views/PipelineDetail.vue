@@ -885,8 +885,20 @@ onMounted(async () => {
   // 从URL query参数获取流水线名称（新建流水线时传递）
   const pipelineName = route.query.name as string || '新流水线'
 
+  // 保存本地创建的流水线（尚未持久化到后端），防止 fetchPipelines 覆盖后丢失
+  const localPipelines = store.pipelines.filter(p =>
+    typeof p.id === 'string' && (p.id.startsWith('new-') || /^[0-9a-f-]{36}$/i.test(p.id))
+  )
+
   // 从后端加载流水线列表
   await store.fetchPipelines()
+
+  // 恢复被后端数据覆盖的本地流水线
+  for (const lp of localPipelines) {
+    if (!store.pipelines.some(p => p.id === lp.id)) {
+      store.pipelines.unshift(lp)
+    }
+  }
 
   // 设置当前流水线
   if (hasValidRouteId) {
@@ -915,7 +927,14 @@ onMounted(async () => {
     store.currentPipelineId = routePipelineId
     store.fetchPipelineContent(routePipelineId)
   } else {
-    // 没有路由ID（新建流水线页面），创建一个新的空白流水线
+    // 没有路由ID，先按名称查找已有流水线（可能来自 PipelineList 创建的本地流水线）
+    const existingPipeline = store.pipelines.find(p => p.name === pipelineName)
+    if (existingPipeline) {
+      selectedPipelineId.value = existingPipeline.id
+      store.currentPipelineId = existingPipeline.id
+      return
+    }
+    // 未找到，创建一个新的空白流水线
     const newId = 'new-' + Date.now()
     const newPipeline: Pipeline = {
       id: newId,
@@ -1198,6 +1217,16 @@ function addScriptTask() {
   addQuickTask('sh', '执行脚本', { command: 'echo "Hello World"' })
 }
 
+function findStageIdByStepId(stepId: string): string | null {
+  if (!stepId || !store.currentPipeline) return null
+  for (const stage of store.currentPipeline.stages) {
+    for (const branch of stage.branches) {
+      if (branch.steps.some(s => s.id === stepId)) return stage.id
+    }
+  }
+  return null
+}
+
 function addQuickTask(stepType: PipelineStep['type'], name: string, config: Record<string, any>) {
   if (!store.currentPipeline) return
   const pipeline = store.currentPipeline
@@ -1217,10 +1246,12 @@ function addQuickTask(stepType: PipelineStep['type'], name: string, config: Reco
     })
     addStepToStage(stageId, branchId, stepType, name, config)
   } else {
-    // Add to last stage
-    const lastStage = pipeline.stages[pipeline.stages.length - 1]
-    const branchId = lastStage.branches[0]?.id || uuidv4()
-    addStepToStage(lastStage.id, branchId, stepType, name, config)
+    // 优先：选中组件 → 其所属阶段；其次：选中阶段；最后：最后一个阶段
+    const stageId = selectedStageId.value || findStageIdByStepId(selectedStepId.value)
+    const targetStage = stageId ? pipeline.stages.find(s => s.id === stageId) : null
+    const stage = targetStage || pipeline.stages[pipeline.stages.length - 1]
+    const branchId = stage.branches[0]?.id || uuidv4()
+    addStepToStage(stage.id, branchId, stepType, name, config)
   }
   ElMessage.success(`已添加 ${name}`)
 }
