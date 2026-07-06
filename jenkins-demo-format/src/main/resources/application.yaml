@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: jenkins-demo-format
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.example.jenkinsdemoformat.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.example.jenkinsdemoformat.mapper: DEBUG
